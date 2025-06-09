@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
 import Webcam from 'react-webcam';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = 'https://stdonhszqmzmcxteoett.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0ZG9uaHN6cW16bWN4dGVvZXR0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0NzM1MTMsImV4cCI6MjA2NTA0OTUxM30.H8RVprjN3t0G4-MkC7WzQ_AtCgK0Pci7-pMhD6zyXG';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 function StudentForm() {
   const [formData, setFormData] = useState({
@@ -7,6 +12,7 @@ function StudentForm() {
     admissionDate: '', batch: '', fee: '', notes: '', photo: null
   });
   const [capture, setCapture] = useState(false);
+  const [loading, setLoading] = useState(false);
   const webcamRef = React.useRef(null);
 
   const handleChange = (e) => {
@@ -15,7 +21,14 @@ function StudentForm() {
   };
 
   const handleImageChange = (e) => {
-    setFormData({ ...formData, photo: URL.createObjectURL(e.target.files[0]) });
+    const file = e.target.files[0];
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFormData({ ...formData, photo: reader.result }); // base64
+    };
+    if (file) {
+      reader.readAsDataURL(file);
+    }
   };
 
   const capturePhoto = () => {
@@ -24,7 +37,7 @@ function StudentForm() {
     setCapture(false);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const { name, fatherName, mobile, dob } = formData;
 
@@ -33,11 +46,40 @@ function StudentForm() {
       return;
     }
 
-    alert("✅ Form submitted!");
+    setLoading(true);
+
+    try {
+      const { error } = await supabase.from('students').insert([{
+        name: formData.name,
+        father_name: formData.fatherName,
+        mobile: formData.mobile,
+        dob: formData.dob,
+        receipt: formData.receipt,
+        admission_date: formData.admissionDate,
+        batch: formData.batch,
+        fee: formData.fee,
+        notes: formData.notes,
+        photo: formData.photo // base64 string
+      }]);
+
+      if (error) throw error;
+
+      alert('✅ Data inserted successfully in Supabase!');
+      setFormData({
+        name: '', fatherName: '', mobile: '', dob: '', receipt: '',
+        admissionDate: '', batch: '', fee: '', notes: '', photo: null
+      });
+    } catch (error) {
+      console.error('Error inserting data:', error.message);
+      alert('❌ Error inserting data: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 p-4 max-w-md mx-auto">
+      {/* All Input Fields as before */}
       <label htmlFor="name">Student's Name<span className="text-red-500">*</span>:</label>
       <input id="name" name="name" placeholder="Student's Name" className="input" onChange={handleChange} value={formData.name} />
 
@@ -85,7 +127,9 @@ function StudentForm() {
 
       {formData.photo && <img src={formData.photo} alt="Preview" className="w-32 h-32 object-cover rounded border" />}
 
-      <button type="submit" className="bg-orange-500 text-white px-6 py-2 rounded">Submit</button>
+      <button type="submit" className="bg-orange-500 text-white px-6 py-2 rounded" disabled={loading}>
+        {loading ? 'Submitting...' : 'Submit'}
+      </button>
     </form>
   );
 }
